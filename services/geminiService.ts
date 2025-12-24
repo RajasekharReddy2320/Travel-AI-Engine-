@@ -81,7 +81,14 @@ const RESPONSE_SCHEMA: Schema = {
 };
 
 export const generateTrip = async (prefs: TripPreferences): Promise<TripPlan> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  let apiKey = '';
+  try {
+    apiKey = process.env.API_KEY || '';
+  } catch (e) {
+    console.warn("API_KEY not found in environment");
+  }
+
+  const ai = new GoogleGenAI({ apiKey });
 
   const destString = prefs.destinations.join(', ');
 

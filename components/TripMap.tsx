@@ -9,6 +9,7 @@ interface TripMapProps {
 export const TripMap: React.FC<TripMapProps> = ({ plan }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
+  const layerGroupRef = useRef<L.LayerGroup | null>(null);
 
   // Custom marker icon to avoid 404s with default leaflet assets in some bundlers
   const customIcon = L.icon({
@@ -21,29 +22,43 @@ export const TripMap: React.FC<TripMapProps> = ({ plan }) => {
     shadowSize: [41, 41]
   });
 
+  // Initialize Map
   useEffect(() => {
     if (!mapContainerRef.current) return;
+    if (mapInstanceRef.current) return; // Prevent double initialization
 
-    // Initialize map if not already done
-    if (!mapInstanceRef.current) {
-      mapInstanceRef.current = L.map(mapContainerRef.current).setView([0, 0], 2);
-      
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-      }).addTo(mapInstanceRef.current);
-    }
-
-    const map = mapInstanceRef.current;
+    const map = L.map(mapContainerRef.current).setView([20, 0], 2);
     
-    // Clear existing layers (except tile layer)
-    map.eachLayer((layer) => {
-      if (layer instanceof L.Marker || layer instanceof L.Polyline) {
-        map.removeLayer(layer);
-      }
-    });
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    }).addTo(map);
 
-    const points: L.LatLngExpression[] = [];
-    const markers: L.Marker[] = [];
+    // Create a LayerGroup to hold all markers/lines for easy clearing
+    const layerGroup = L.layerGroup().addTo(map);
+    
+    mapInstanceRef.current = map;
+    layerGroupRef.current = layerGroup;
+
+    return () => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+        layerGroupRef.current = null;
+      }
+    };
+  }, []);
+
+  // Update Map Content
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    const layerGroup = layerGroupRef.current;
+
+    if (!map || !layerGroup) return;
+
+    // Clear previous markers and routes
+    layerGroup.clearLayers();
+
+    const points: L.LatLng[] = [];
 
     plan.days.forEach((day) => {
       day.activities.forEach((activity) => {
@@ -67,29 +82,21 @@ export const TripMap: React.FC<TripMapProps> = ({ plan }) => {
               </div>
             `);
           
-          marker.addTo(map);
-          markers.push(marker);
+          marker.addTo(layerGroup);
         }
       });
     });
 
     // Draw lines between points to show the route
     if (points.length > 1) {
-      L.polyline(points, { color: '#4f46e5', weight: 3, opacity: 0.7, dashArray: '5, 10' }).addTo(map);
+      L.polyline(points, { color: '#4f46e5', weight: 3, opacity: 0.7, dashArray: '5, 10' }).addTo(layerGroup);
     }
 
-    // Fit bounds
-    if (markers.length > 0) {
-      const group = L.featureGroup(markers);
-      map.fitBounds(group.getBounds(), { padding: [50, 50] });
+    // Fit bounds to show all markers
+    if (points.length > 0) {
+      const bounds = L.latLngBounds(points);
+      map.fitBounds(bounds, { padding: [50, 50] });
     }
-
-    // Cleanup on unmount (optional, but good practice if component is destroyed)
-    return () => {
-      // We don't necessarily want to destroy the map instance if we are just re-rendering, 
-      // but in this simple case, we keep the instance alive.
-    };
-
   }, [plan]);
 
   return (

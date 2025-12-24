@@ -1,10 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { TripPreferences, LuxuryLevel } from '../types';
 import { Plane, Calendar, DollarSign, Users, Star, Sparkles, MapPin, Plus, X } from 'lucide-react';
 
 interface TripFormProps {
   onSubmit: (prefs: TripPreferences) => void;
   isLoading: boolean;
+}
+
+declare global {
+  interface Window {
+    google: any;
+  }
 }
 
 export const TripForm: React.FC<TripFormProps> = ({ onSubmit, isLoading }) => {
@@ -17,6 +23,77 @@ export const TripForm: React.FC<TripFormProps> = ({ onSubmit, isLoading }) => {
   const [travelers, setTravelers] = useState(2);
   const [luxuryLevel, setLuxuryLevel] = useState<LuxuryLevel>(LuxuryLevel.MODERATE);
   const [interests, setInterests] = useState('Food, Culture, Tech, Nature');
+
+  const originInputRef = useRef<HTMLInputElement>(null);
+  const destinationInputRef = useRef<HTMLInputElement>(null);
+  const originAutocompleteRef = useRef<any>(null);
+  const destAutocompleteRef = useRef<any>(null);
+
+  useEffect(() => {
+    const loadGoogleMapsScript = () => {
+      if (window.google && window.google.maps && window.google.maps.places) {
+         initAutocomplete();
+         return;
+      }
+
+      if (document.getElementById('google-maps-script')) {
+        return; 
+      }
+
+      let apiKey = '';
+      try {
+        apiKey = process.env.API_KEY || '';
+      } catch (e) {
+        console.warn("Could not access process.env.API_KEY");
+      }
+      
+      if (!apiKey) return;
+
+      const script = document.createElement('script');
+      script.id = 'google-maps-script';
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
+      script.async = true;
+      script.defer = true;
+      script.onload = () => initAutocomplete();
+      script.onerror = () => console.warn("Failed to load Google Maps script. Autocomplete disabled.");
+      document.head.appendChild(script);
+    };
+
+    const initAutocomplete = () => {
+       if (!window.google || !window.google.maps || !window.google.maps.places) return;
+
+       const options = {
+         types: ['(cities)'],
+         fields: ['formatted_address', 'geometry', 'name']
+       };
+
+       if (originInputRef.current) {
+          originAutocompleteRef.current = new window.google.maps.places.Autocomplete(originInputRef.current, options);
+          originAutocompleteRef.current.addListener('place_changed', () => {
+             const place = originAutocompleteRef.current.getPlace();
+             if (place && place.formatted_address) {
+                setOrigin(place.formatted_address);
+             } else if (place && place.name) {
+                setOrigin(place.name);
+             }
+          });
+       }
+
+       if (destinationInputRef.current) {
+          destAutocompleteRef.current = new window.google.maps.places.Autocomplete(destinationInputRef.current, options);
+          destAutocompleteRef.current.addListener('place_changed', () => {
+             const place = destAutocompleteRef.current.getPlace();
+              if (place && place.formatted_address) {
+                setNewDestination(place.formatted_address);
+             } else if (place && place.name) {
+                setNewDestination(place.name);
+             }
+          });
+       }
+    };
+
+    loadGoogleMapsScript();
+  }, []);
 
   const handleAddDestination = () => {
     if (newDestination.trim()) {
@@ -33,6 +110,12 @@ export const TripForm: React.FC<TripFormProps> = ({ onSubmit, isLoading }) => {
     if (e.key === 'Enter') {
       e.preventDefault();
       handleAddDestination();
+    }
+  };
+
+  const handleOriginKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
     }
   };
 
@@ -64,10 +147,12 @@ export const TripForm: React.FC<TripFormProps> = ({ onSubmit, isLoading }) => {
               <MapPin className="h-5 w-5 text-slate-400" />
             </div>
             <input
+              ref={originInputRef}
               type="text"
               required
               value={origin}
               onChange={(e) => setOrigin(e.target.value)}
+              onKeyDown={handleOriginKeyDown}
               className="pl-10 block w-full rounded-xl border-slate-200 bg-slate-50 focus:border-indigo-500 focus:ring-indigo-500 transition-all p-3 text-sm"
               placeholder="e.g. New York, USA"
             />
@@ -99,6 +184,7 @@ export const TripForm: React.FC<TripFormProps> = ({ onSubmit, isLoading }) => {
                 <Plane className="h-5 w-5 text-slate-400" />
               </div>
               <input
+                ref={destinationInputRef}
                 type="text"
                 value={newDestination}
                 onChange={(e) => setNewDestination(e.target.value)}

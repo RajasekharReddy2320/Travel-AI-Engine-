@@ -12,11 +12,15 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Check if API key is present on mount (basic check, more robust could use context)
+  // Check if API key is present on mount (safely)
   React.useEffect(() => {
-    if (!process.env.API_KEY) {
-       // In a real app we might prompt user, but here we assume env var is injected
-       console.warn("API_KEY environment variable is not set.");
+    try {
+      if (!process.env.API_KEY) {
+         console.warn("API_KEY environment variable is not set.");
+      }
+    } catch (e) {
+      // Ignore reference error if process is not defined in the browser
+      console.warn("Could not check process.env.API_KEY");
     }
   }, []);
 
