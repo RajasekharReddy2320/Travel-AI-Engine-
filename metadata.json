@@ -1,0 +1,5 @@
+{
+  "name": "AI Trip Planner & Budget Engine",
+  "description": "An intelligent travel planning application that generates optimized itineraries with real-time budget and time analysis using Gemini AI.",
+  "requestFramePermissions": []
+}
